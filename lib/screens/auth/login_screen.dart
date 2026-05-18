@@ -33,7 +33,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     );
 
     _slideAnimation =
-        Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
+        Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero).animate(
           CurvedAnimation(
             parent: _animationController,
             curve: Curves.easeOutCubic,
@@ -85,85 +85,108 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     final authState = ref.watch(authProvider);
 
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              const Color(0xFF0D1B3E),
-              const Color(0xFF1A1A3E),
-              AppColors.backgroundDark,
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 60),
-              child: SlideTransition(
-                position: _slideAnimation,
-                child: FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Center(
-                        child: Container(
-                          width: 100,
-                          height: 100,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [AppColors.primary, AppColors.secondary],
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.primary.withOpacity(0.3),
-                                blurRadius: 20,
-                                spreadRadius: 5,
-                              ),
-                            ],
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+          child: SlideTransition(
+            position: _slideAnimation,
+            child: FadeTransition(
+              opacity: _fadeAnimation,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(18),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.textPrimary.withOpacity(0.08),
+                            blurRadius: 20,
+                            spreadRadius: 4,
                           ),
-                          child: const Icon(
-                            Icons.wifi_lock,
-                            size: 50,
-                            color: Colors.white,
-                          ),
-                        ),
+                        ],
                       ),
-                      const SizedBox(height: 48),
-                      const Text(
-                        'Selamat Datang Kembali',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textMain,
-                          letterSpacing: 0.5,
-                        ),
+                      child: const Icon(
+                        Icons.wifi_rounded,
+                        color: AppColors.primary,
+                        size: 32,
                       ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Kelola layanan internet Anda',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 56),
-                      _buildEmailField(),
-                      const SizedBox(height: 20),
-                      _buildPasswordField(),
-                      const SizedBox(height: 28),
-                      _buildLoginButton(authState),
-                    ],
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 34),
+                  const Text(
+                    'Selamat Datang Kembali',
+                    style: TextStyle(
+                      fontSize: 30,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary,
+                      height: 1.1,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Masuk untuk mengakses kontrol jaringan dan layanan Anda.',
+                    style: TextStyle(
+                      fontSize: 15,
+                      height: 1.6,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 30),
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(28),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.textPrimary.withOpacity(0.05),
+                          blurRadius: 30,
+                          spreadRadius: 4,
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Text(
+                          'Masuk Sekarang',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 22),
+                        _buildEmailField(),
+                        const SizedBox(height: 18),
+                        _buildPasswordField(),
+                        const SizedBox(height: 18),
+                        _buildLoginButton(authState),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  TextButton(
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Fitur lupa kata sandi belum diimplementasikan',
+                          ),
+                        ),
+                      );
+                    },
+                    child: const Text('Lupa kata sandi?'),
+                  ),
+                ],
               ),
             ),
           ),
@@ -176,7 +199,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     return TextField(
       controller: _emailController,
       keyboardType: TextInputType.emailAddress,
-      style: const TextStyle(color: AppColors.textMain, fontSize: 16),
+      style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
       decoration: InputDecoration(
         labelText: 'Email / Username',
         labelStyle: const TextStyle(
@@ -188,18 +211,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           color: AppColors.textSecondary,
         ),
         filled: true,
-        fillColor: Colors.white.withOpacity(0.08),
+        fillColor: AppColors.surfaceSoft,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.15)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.15)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+          borderSide: BorderSide.none,
         ),
       ),
     );
@@ -209,7 +224,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     return TextField(
       controller: _passwordController,
       obscureText: _isObscure,
-      style: const TextStyle(color: AppColors.textMain, fontSize: 16),
+      style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
       decoration: InputDecoration(
         labelText: 'Kata Sandi',
         labelStyle: const TextStyle(
@@ -234,69 +249,41 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           },
         ),
         filled: true,
-        fillColor: Colors.white.withOpacity(0.08),
+        fillColor: AppColors.surfaceSoft,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.15)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.15)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+          borderSide: BorderSide.none,
         ),
       ),
     );
   }
 
   Widget _buildLoginButton(dynamic authState) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [AppColors.primary, AppColors.secondary],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withOpacity(0.3),
-            blurRadius: 12,
-            spreadRadius: 2,
-            offset: const Offset(0, 4),
-          ),
-        ],
+    return ElevatedButton(
+      onPressed: authState.isLoading ? null : _handleLogin,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(vertical: 18),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: authState.isLoading ? null : _handleLogin,
-          borderRadius: BorderRadius.circular(16),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 18),
-            child: Center(
-              child: authState.isLoading
-                  ? const SizedBox(
-                      height: 24,
-                      width: 24,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2.5,
-                      ),
-                    )
-                  : const Text(
-                      'MASUK',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16,
-                        color: Colors.white,
-                        letterSpacing: 1,
-                      ),
-                    ),
+      child: authState.isLoading
+          ? const SizedBox(
+              height: 22,
+              width: 22,
+              child: CircularProgressIndicator(
+                color: Colors.white,
+                strokeWidth: 2.5,
+              ),
+            )
+          : const Text(
+              'MASUK',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 16,
+                letterSpacing: 1,
+              ),
             ),
-          ),
-        ),
-      ),
     );
   }
 }
