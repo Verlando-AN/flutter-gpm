@@ -1,4 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../models/customer_model.dart';
+import '../models/teknisi_model.dart';
 import '../repositories/auth_repository.dart';
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
@@ -12,7 +15,7 @@ class AuthState {
   final dynamic user;
   final bool isAuthenticated;
 
-  AuthState({
+  const AuthState({
     this.isLoading = false,
     this.error,
     this.role,
@@ -43,48 +46,120 @@ class AuthNotifier extends Notifier<AuthState> {
   @override
   AuthState build() {
     _repository = ref.read(authRepositoryProvider);
-    // Cannot call async methods reliably during build that mutate state heavily,
-    // but we can trigger it:
-    Future.microtask(() => checkAuthStatus());
-    return AuthState();
+
+    Future.microtask(() {
+      checkAuthStatus();
+    });
+
+    return const AuthState();
   }
 
   Future<void> checkAuthStatus() async {
-    state = state.copyWith(isLoading: true);
+    state = state.copyWith(isLoading: true, error: null);
+
     try {
       final token = await _repository.getToken();
       final role = await _repository.getRole();
-      if (token != null && role != null) {
-        state = state.copyWith(isLoading: false, isAuthenticated: true, role: role);
+
+      if (token != null &&
+          token.isNotEmpty &&
+          role != null &&
+          role.isNotEmpty) {
+        final stored = await _repository.getStoredUser();
+
+        dynamic userObj;
+
+        if (stored != null) {
+          if (role.toLowerCase() == 'teknisi') {
+            userObj = TeknisiModel.fromJson(stored);
+          } else {
+            userObj = CustomerModel.fromJson(stored);
+          }
+        }
+
+        state = state.copyWith(
+          isLoading: false,
+          isAuthenticated: true,
+          role: role,
+          user: userObj,
+          error: null,
+        );
+
+        print('AUTH RESTORE USER => ${state.user}');
+        print('AUTH RESTORE TYPE => ${state.user.runtimeType}');
       } else {
-        state = state.copyWith(isLoading: false, isAuthenticated: false);
+        state = const AuthState(isAuthenticated: false, isLoading: false);
       }
     } catch (e) {
-      state = state.copyWith(isLoading: false, isAuthenticated: false, error: e.toString());
+      print('CHECK AUTH ERROR => $e');
+
+      state = AuthState(
+        isAuthenticated: false,
+        isLoading: false,
+        error: e.toString(),
+      );
     }
   }
 
   Future<bool> login(String email, String password) async {
     state = state.copyWith(isLoading: true, error: null);
+
     try {
       final result = await _repository.login(email, password);
+
+      print('LOGIN RESULT => $result');
+
+      final role = (result['role'] ?? '').toString().toLowerCase();
+
+      final dynamic userObj = result['user'];
+
+      print('LOGIN USER => ${userObj.name}');
+      print('LOGIN TYPE => ${userObj.runtimeType}');
+
       state = state.copyWith(
         isLoading: false,
         isAuthenticated: true,
-        role: result['role'],
-        user: result['user'],
+        role: role,
+        user: userObj,
+        error: null,
       );
+
       return true;
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      print('LOGIN ERROR => $e');
+
+      state = state.copyWith(
+        isLoading: false,
+        isAuthenticated: false,
+        error: e.toString(),
+      );
+
       return false;
     }
   }
 
-  Future<void> logout() async {
-    state = state.copyWith(isLoading: true);
-    await _repository.logout();
-    state = AuthState(); // Reset to default
+  Future<bool> logout() async {
+    try {
+      state = state.copyWith(isLoading: true, error: null);
+
+      await _repository.logout();
+
+      state = const AuthState(isAuthenticated: false, isLoading: false);
+
+      print('LOGOUT COMPLETED SUCCESSFULLY');
+
+      return true;
+    } catch (e) {
+      print('LOGOUT ERROR => $e');
+
+      state = state.copyWith(
+        isLoading: false,
+        isAuthenticated: false,
+        error: e.toString(),
+      );
+
+      return false;
+    }
   }
 }
 

@@ -4,9 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../models/activity_log_model.dart';
 import '../../models/teknisi_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/ticket_provider.dart';
+import '../../repositories/activity_log_repository.dart';
+import '../../widgets/navigation/teknisi_bottom_nav.dart';
 
 class DashboardTeknisiScreen extends ConsumerStatefulWidget {
   const DashboardTeknisiScreen({super.key});
@@ -17,30 +20,114 @@ class DashboardTeknisiScreen extends ConsumerStatefulWidget {
 }
 
 class _DashboardTeknisiScreenState extends ConsumerState<DashboardTeknisiScreen>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _animController;
-  late Animation<double> _fadeAnim;
-  late Animation<Offset> _slideAnim;
+    with TickerProviderStateMixin {
+  late AnimationController _heroController;
+  late AnimationController _staggerController;
+
+  late Animation<double> _heroFade;
+  late Animation<Offset> _heroSlide;
+
+  final List<Animation<double>> _staggerFades = [];
+  final List<Animation<Offset>> _staggerSlides = [];
+  final ActivityLogRepository _activityLogRepository = ActivityLogRepository();
+  IconData _getActivityIcon(String activity) {
+    final text = activity.toLowerCase();
+
+    if (text.contains('login')) {
+      return Icons.login_rounded;
+    }
+
+    if (text.contains('logout')) {
+      return Icons.logout_rounded;
+    }
+
+    if (text.contains('ticket')) {
+      return Icons.confirmation_number_rounded;
+    }
+
+    if (text.contains('absensi')) {
+      return Icons.camera_front_rounded;
+    }
+
+    return Icons.history_rounded;
+  }
+
+  Color _getActivityColor(String activity) {
+    final text = activity.toLowerCase();
+
+    if (text.contains('login')) {
+      return Colors.green;
+    }
+
+    if (text.contains('logout')) {
+      return Colors.red;
+    }
+
+    if (text.contains('ticket')) {
+      return AppColors.primary;
+    }
+
+    if (text.contains('absensi')) {
+      return Colors.purple;
+    }
+
+    return Colors.blueGrey;
+  }
+
+  static const int _staggerCount = 5;
 
   @override
   void initState() {
     super.initState();
-    _animController = AnimationController(
+
+    _heroController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 700),
+      duration: const Duration(milliseconds: 600),
     );
-    _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
-    _slideAnim = Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero)
+    _heroFade = CurvedAnimation(parent: _heroController, curve: Curves.easeOut);
+    _heroSlide = Tween<Offset>(begin: const Offset(0, -0.04), end: Offset.zero)
         .animate(
-          CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic),
+          CurvedAnimation(parent: _heroController, curve: Curves.easeOutCubic),
         );
-    _animController.forward();
+
+    _staggerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+
+    for (int i = 0; i < _staggerCount; i++) {
+      final start = i * 0.12;
+      final end = (start + 0.55).clamp(0.0, 1.0);
+      final interval = Interval(start, end, curve: Curves.easeOutCubic);
+      _staggerFades.add(
+        CurvedAnimation(parent: _staggerController, curve: interval),
+      );
+      _staggerSlides.add(
+        Tween<Offset>(
+          begin: const Offset(0, 0.08),
+          end: Offset.zero,
+        ).animate(CurvedAnimation(parent: _staggerController, curve: interval)),
+      );
+    }
+
+    _heroController.forward();
+    Future.delayed(const Duration(milliseconds: 200), () {
+      if (mounted) _staggerController.forward();
+    });
   }
 
   @override
   void dispose() {
-    _animController.dispose();
+    _heroController.dispose();
+    _staggerController.dispose();
     super.dispose();
+  }
+
+  Widget _stagger(int index, Widget child) {
+    return FadeTransition(
+      opacity: _staggerFades[index],
+      child: SlideTransition(position: _staggerSlides[index], child: child),
+    );
   }
 
   @override
@@ -49,539 +136,692 @@ class _DashboardTeknisiScreenState extends ConsumerState<DashboardTeknisiScreen>
     final TeknisiModel? teknisi = authState.user is TeknisiModel
         ? authState.user as TeknisiModel
         : null;
-    final colorScheme = Theme.of(context).colorScheme;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle(
+      value: const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Theme.of(context).brightness == Brightness.dark
-            ? Brightness.light
-            : Brightness.dark,
+        statusBarIconBrightness: Brightness.light,
       ),
       child: Scaffold(
-        backgroundColor: AppColors.background,
-        body: FadeTransition(
-          opacity: _fadeAnim,
-          child: SlideTransition(
-            position: _slideAnim,
-            child: RefreshIndicator(
-              color: AppColors.primary,
-              displacement: 60,
-              strokeWidth: 2.5,
-              onRefresh: () async {
-                ref.invalidate(ticketsProvider);
-                try {
-                  await ref.read(ticketsProvider.future);
-                } catch (_) {}
-              },
-              child: CustomScrollView(
-                physics: const BouncingScrollPhysics(
-                  parent: AlwaysScrollableScrollPhysics(),
-                ),
-                slivers: [
-                  // Top safe area padding
-                  SliverToBoxAdapter(
-                    child: SizedBox(
-                      height: MediaQuery.of(context).padding.top + 12,
-                    ),
-                  ),
+        backgroundColor: const Color(0xFFF5F7FF),
 
-                  // Header
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-                      child: _buildHeader(context, ref, teknisi),
-                    ),
-                  ),
+        bottomNavigationBar: const TeknisiBottomNav(),
 
-                  const SliverToBoxAdapter(child: SizedBox(height: 24)),
-
-                  // Stats
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: _buildStatsSection(ref),
-                    ),
-                  ),
-
-                  const SliverToBoxAdapter(child: SizedBox(height: 28)),
-
-                  // Menu label
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: _buildSectionLabel('Menu Utama'),
-                    ),
-                  ),
-
-                  const SliverToBoxAdapter(child: SizedBox(height: 14)),
-
-                  // Menu grid
-                  SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    sliver: SliverGrid(
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            mainAxisSpacing: 14,
-                            crossAxisSpacing: 14,
-                            childAspectRatio: 1.05,
-                          ),
-                      delegate: SliverChildListDelegate([
-                        _buildMenuItem(
-                          context,
-                          title: 'Data Tiket',
-                          subtitle: 'Kelola semua tiket',
-                          icon: Icons.confirmation_number_rounded,
-                          color: AppColors.primary,
-                          route: '/teknisi/tickets',
-                          badgeCount: null,
-                        ),
-                        _buildMenuItem(
-                          context,
-                          title: 'Map ODP',
-                          subtitle: 'Lihat sebaran ODP',
-                          icon: Icons.map_rounded,
-                          color: const Color(0xFF0EA5E9),
-                          route: '/teknisi/map-odp',
-                          badgeCount: null,
-                        ),
-                        _buildMenuItem(
-                          context,
-                          title: 'Pelanggan',
-                          subtitle: 'Lokasi pelanggan',
-                          icon: Icons.person_pin_circle_rounded,
-                          color: const Color(0xFF10B981),
-                          route: '/teknisi/map-customer',
-                          badgeCount: null,
-                        ),
-                        _buildMenuItem(
-                          context,
-                          title: 'Absensi',
-                          subtitle: 'Check-in harian',
-                          icon: Icons.camera_front_rounded,
-                          color: const Color(0xFF8B5CF6),
-                          route: '/teknisi/attendance',
-                          badgeCount: null,
-                        ),
-                      ]),
-                    ),
-                  ),
-
-                  const SliverToBoxAdapter(child: SizedBox(height: 28)),
-
-                  // Activity label
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: _buildSectionLabel('Aktivitas Terbaru'),
-                    ),
-                  ),
-
-                  const SliverToBoxAdapter(child: SizedBox(height: 14)),
-
-                  // Activity list
-                  SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    sliver: SliverList(
-                      delegate: SliverChildListDelegate([
-                        _buildActivityItem(
-                          icon: Icons.confirmation_number_rounded,
-                          color: AppColors.primary,
-                          title: 'Update Tiket #1024',
-                          subtitle: 'Status diubah ke Selesai',
-                          time: '10 mnt lalu',
-                          isLast: false,
-                        ),
-                        _buildActivityItem(
-                          icon: Icons.camera_front_rounded,
-                          color: const Color(0xFF8B5CF6),
-                          title: 'Check-in Absensi',
-                          subtitle: 'Lokasi Kantor Pusat',
-                          time: '08:00 WIB',
-                          isLast: false,
-                        ),
-                        _buildActivityItem(
-                          icon: Icons.map_rounded,
-                          color: const Color(0xFF0EA5E9),
-                          title: 'ODP Diperiksa',
-                          subtitle: 'ODP-LPG-FAC/001 — Normal',
-                          time: 'Kemarin',
-                          isLast: true,
-                        ),
-                      ]),
-                    ),
-                  ),
-
-                  // Bottom padding
-                  SliverToBoxAdapter(
-                    child: SizedBox(
-                      height: MediaQuery.of(context).padding.bottom + 100,
-                    ),
-                  ),
-                ],
-              ),
+        body: RefreshIndicator(
+          color: AppColors.primary,
+          displacement: 80,
+          strokeWidth: 2.5,
+          onRefresh: () async {
+            ref.invalidate(ticketsProvider);
+            try {
+              await ref.read(ticketsProvider.future);
+            } catch (_) {}
+          },
+          child: CustomScrollView(
+            physics: const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(),
             ),
+            slivers: [
+              // ── Hero Header ─────────────────────────────────────────
+              SliverToBoxAdapter(
+                child: FadeTransition(
+                  opacity: _heroFade,
+                  child: SlideTransition(
+                    position: _heroSlide,
+                    child: _HeroHeader(teknisi: teknisi),
+                  ),
+                ),
+              ),
+
+              // ── Stats (overlaps hero) ────────────────────────────────
+              SliverToBoxAdapter(
+                child: _stagger(
+                  0,
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: _buildStatsSection(ref),
+                  ),
+                ),
+              ),
+
+              const SliverToBoxAdapter(child: SizedBox(height: 28)),
+
+              // ── Menu label ───────────────────────────────────────────
+              SliverToBoxAdapter(
+                child: _stagger(
+                  1,
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: const _SectionLabel(title: 'Menu Utama'),
+                  ),
+                ),
+              ),
+
+              const SliverToBoxAdapter(child: SizedBox(height: 14)),
+
+              // ── Menu Grid ────────────────────────────────────────────
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                sliver: SliverToBoxAdapter(
+                  child: _stagger(2, _buildMenuGrid(context)),
+                ),
+              ),
+
+              const SliverToBoxAdapter(child: SizedBox(height: 28)),
+
+              // ── Activity label ───────────────────────────────────────
+              SliverToBoxAdapter(
+                child: _stagger(
+                  3,
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: const _SectionLabel(title: 'Aktivitas Terbaru'),
+                  ),
+                ),
+              ),
+
+              const SliverToBoxAdapter(child: SizedBox(height: 14)),
+
+              // ── Activity list ────────────────────────────────────────
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                sliver: SliverToBoxAdapter(
+                  child: _stagger(4, _buildActivityList()),
+                ),
+              ),
+
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  // Padding disesuaikan karena nav bawah sudah dihapus
+                  height: MediaQuery.of(context).padding.bottom + 20,
+                ),
+              ),
+            ],
           ),
         ),
-        bottomNavigationBar: _buildBottomNav(context),
       ),
     );
   }
 
-  // ─── HEADER ──────────────────────────────────────────────────────────────────
+  // ── STATS ─────────────────────────────────────────────────────────────────
 
-  Widget _buildHeader(
-    BuildContext context,
-    WidgetRef ref,
-    TeknisiModel? teknisi,
-  ) {
+  Widget _buildStatsSection(WidgetRef ref) {
+    final ticketsAsync = ref.watch(ticketsProvider);
+    return ticketsAsync.when(
+      data: (tickets) {
+        final open = tickets
+            .where((t) => t.status.toLowerCase() == 'open')
+            .length;
+        final assigned = tickets
+            .where((t) => t.status.toLowerCase() == 'assigned')
+            .length;
+        final inProgress = tickets
+            .where((t) => t.status.toLowerCase() == 'in_progress')
+            .length;
+        final resolved = tickets
+            .where((t) => t.status.toLowerCase() == 'resolved')
+            .length;
+        final total = tickets.length;
+        return _StatsContent(
+          total: total,
+          open: open,
+          assigned: assigned,
+          inProgress: inProgress,
+          resolved: resolved,
+        );
+      },
+      loading: () => const _StatsContent(
+        total: null,
+        open: null,
+        assigned: null,
+        inProgress: null,
+        resolved: null,
+      ),
+      error: (_, __) => const SizedBox.shrink(),
+    );
+  }
+
+  // ── MENU GRID ──────────────────────────────────────────────────────────────
+
+  Widget _buildMenuGrid(BuildContext context) {
+    final menus = [
+      _MenuData(
+        title: 'Data Tiket',
+        subtitle: 'Kelola semua tiket',
+        icon: Icons.confirmation_number_rounded,
+        color: AppColors.primary,
+        gradientEnd: const Color(0xFF6366F1),
+        route: '/teknisi/tickets',
+      ),
+      _MenuData(
+        title: 'Map ODP',
+        subtitle: 'Sebaran titik ODP',
+        icon: Icons.map_rounded,
+        color: const Color(0xFF0EA5E9),
+        gradientEnd: const Color(0xFF38BDF8),
+        route: '/teknisi/map-odp',
+      ),
+      _MenuData(
+        title: 'Pelanggan',
+        subtitle: 'Lokasi pelanggan',
+        icon: Icons.person_pin_circle_rounded,
+        color: const Color(0xFF10B981),
+        gradientEnd: const Color(0xFF34D399),
+        route: '/teknisi/map-customer',
+      ),
+      _MenuData(
+        title: 'Absensi',
+        subtitle: 'Check-in harian',
+        icon: Icons.camera_front_rounded,
+        color: const Color(0xFF8B5CF6),
+        gradientEnd: const Color(0xFFA78BFA),
+        route: '/teknisi/attendance',
+      ),
+    ];
+
+    return GridView.builder(
+      physics: const NeverScrollableScrollPhysics(),
+      shrinkWrap: true,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 14,
+        crossAxisSpacing: 14,
+        childAspectRatio: 1.0,
+      ),
+      itemCount: menus.length,
+      itemBuilder: (context, i) => _MenuCard(data: menus[i]),
+    );
+  }
+
+  // ── ACTIVITY LIST ──────────────────────────────────────────────────────────
+
+  Widget _buildActivityList() {
+    return FutureBuilder<List<ActivityLogModel>>(
+      future: _activityLogRepository.getLogs(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.red.shade50,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Text(
+              'Error: ${snapshot.error}',
+              style: const TextStyle(color: Colors.red),
+            ),
+          );
+        }
+
+        final logs = snapshot.data ?? [];
+
+        if (logs.isEmpty) {
+          return Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: const Center(child: Text('Belum ada aktivitas')),
+          );
+        }
+
+        return Column(
+          children: List.generate(logs.length, (i) {
+            final log = logs[i];
+
+            return Padding(
+              padding: EdgeInsets.only(bottom: i < logs.length - 1 ? 10 : 0),
+              child: _ActivityCard(
+                data: _ActivityData(
+                  icon: _getActivityIcon(log.activity),
+                  color: _getActivityColor(log.activity),
+                  title: log.activity,
+                  subtitle: log.ipAddress,
+                  time: log.createdAt,
+                ),
+              ),
+            );
+          }),
+        );
+      },
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+// HERO HEADER
+// ════════════════════════════════════════════════════════════════════════════════
+
+class _HeroHeader extends ConsumerWidget {
+  const _HeroHeader({required this.teknisi});
+  final TeknisiModel? teknisi;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     final now = DateTime.now();
     final hour = now.hour;
-    String greeting;
+    final String greeting;
+    final String emoji;
     if (hour < 11) {
       greeting = 'Selamat Pagi';
+      emoji = '☀️';
     } else if (hour < 15) {
       greeting = 'Selamat Siang';
+      emoji = '🌤';
     } else if (hour < 19) {
       greeting = 'Selamat Sore';
+      emoji = '🌇';
     } else {
       greeting = 'Selamat Malam';
+      emoji = '🌙';
     }
 
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: AppColors.border, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withOpacity(0.06),
-            blurRadius: 24,
-            offset: const Offset(0, 6),
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        // ── Background gradient card ──────────────────────────────────
+        Container(
+          width: double.infinity,
+          padding: EdgeInsets.only(
+            top: MediaQuery.of(context).padding.top + 20,
+            left: 24,
+            right: 24,
+            bottom: 30,
           ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // Avatar
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: [AppColors.primary, AppColors.primary.withOpacity(0.7)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            child: const Center(
-              child: Icon(
-                Icons.engineering_rounded,
-                color: Colors.white,
-                size: 30,
-              ),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [AppColors.primary, const Color(0xFF6366F1)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
           ),
-
-          const SizedBox(width: 16),
-
-          // Text
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  greeting,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 0.3,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  teknisi?.name ?? 'Teknisi',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                    letterSpacing: -0.3,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Row(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 7,
-                      height: 7,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF10B981),
-                        shape: BoxShape.circle,
-                      ),
+                    // Greeting row
+                    Row(
+                      children: [
+                        Text(emoji, style: const TextStyle(fontSize: 15)),
+                        const SizedBox(width: 6),
+                        Text(
+                          greeting,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 5),
+                    const SizedBox(height: 6),
+                    // Name
                     Text(
-                      'Online',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w500,
+                      teknisi?.name ?? '',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.8,
+                        height: 1.1,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 12),
+                    // Online badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(100),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 7,
+                            height: 7,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF4ADE80),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          const Text(
+                            'Online · Siap Bertugas',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
-              ],
+              ),
+              const SizedBox(width: 16),
+              // Avatar column (Logout removed)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.4),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.engineering_rounded,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+
+        // ── Decorative blobs ──────────────────────────────────────────
+        Positioned(
+          right: -25,
+          top: 0,
+          child: Container(
+            width: 150,
+            height: 150,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.07),
+              shape: BoxShape.circle,
             ),
           ),
-
-          // Logout button
-          _buildIconButton(
-            icon: Icons.logout_rounded,
-            onTap: () async {
-              await ref.read(authProvider.notifier).logout();
-              if (context.mounted) context.go('/login');
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildIconButton({
-    required IconData icon,
-    required VoidCallback onTap,
-    Color? color,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 42,
-        height: 42,
-        decoration: BoxDecoration(
-          color: AppColors.primarySoft,
-          borderRadius: BorderRadius.circular(14),
         ),
-        child: Icon(icon, color: color ?? AppColors.textSecondary, size: 20),
-      ),
+        Positioned(
+          right: 60,
+          top: -20,
+          child: Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.06),
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+        Positioned(
+          left: -25,
+          bottom: 30,
+          child: Container(
+            width: 110,
+            height: 110,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.05),
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+      ],
     );
   }
+}
 
-  // ─── STATS ────────────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════════
+// STATS
+// ════════════════════════════════════════════════════════════════════════════════
 
-  Widget _buildStatsSection(WidgetRef ref) {
-    final ticketsAsync = ref.watch(ticketsProvider);
+class _StatsContent extends StatelessWidget {
+  const _StatsContent({
+    required this.total,
+    required this.open,
+    required this.assigned,
+    required this.inProgress,
+    required this.resolved,
+  });
 
-    return ticketsAsync.when(
-      data: (tickets) {
-        final pending = tickets
-            .where((t) => t.status.toLowerCase() == 'pending')
-            .length;
-        final onProgress = tickets
-            .where((t) => t.status.toLowerCase() == 'on progress')
-            .length;
-        final selesai = tickets
-            .where((t) => t.status.toLowerCase() == 'selesai')
-            .length;
-        final total = tickets.length;
+  final int? total, open, assigned, inProgress, resolved;
 
-        return Column(
-          children: [
-            // Big featured card — total tickets
-            _buildFeaturedStatCard(total, selesai),
-            const SizedBox(height: 12),
-            // Row of 3 stats
-            Row(
+  @override
+  Widget build(BuildContext context) {
+    return Transform.translate(
+      offset: const Offset(0, 15),
+      child: Column(
+        children: [
+          // ── Featured card ──────────────────────────────────────────
+          Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 22),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(26),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withOpacity(0.12),
+                  blurRadius: 32,
+                  offset: const Offset(0, 12),
+                ),
+              ],
+            ),
+            child: Row(
               children: [
                 Expanded(
-                  child: _buildMiniStatCard(
-                    label: 'Pending',
-                    value: '$pending',
-                    icon: Icons.hourglass_top_rounded,
-                    color: const Color(0xFFF59E0B),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'TOTAL TIKET',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            total != null ? '$total' : '—',
+                            style: TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 46,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -2,
+                              height: 1,
+                            ),
+                          ),
+                          if (total != null) ...[
+                            const SizedBox(width: 6),
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 7),
+                              child: Text(
+                                'tiket',
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      // Progress bar
+                      Stack(
+                        children: [
+                          Container(
+                            height: 8,
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(100),
+                            ),
+                          ),
+                          LayoutBuilder(
+                            builder: (ctx, box) {
+                              final progress =
+                                  (total != null &&
+                                      total! > 0 &&
+                                      resolved != null)
+                                  ? resolved! / total!
+                                  : 0.0;
+                              return Container(
+                                height: 8,
+                                width: box.maxWidth * progress,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      AppColors.primary,
+                                      const Color(0xFF6366F1),
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(100),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        resolved != null && total != null
+                            ? '$resolved dari $total tiket selesai'
+                            : 'Memuat data...',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildMiniStatCard(
-                    label: 'Proses',
-                    value: '$onProgress',
-                    icon: Icons.autorenew_rounded,
-                    color: const Color(0xFF0EA5E9),
+                const SizedBox(width: 20),
+                Container(
+                  width: 68,
+                  height: 68,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(22),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildMiniStatCard(
-                    label: 'Selesai',
-                    value: '$selesai',
-                    icon: Icons.task_alt_rounded,
-                    color: const Color(0xFF10B981),
+                  child: Icon(
+                    Icons.insert_chart_rounded,
+                    color: AppColors.primary,
+                    size: 34,
                   ),
                 ),
               ],
             ),
-          ],
-        );
-      },
-      loading: () => Column(
-        children: [
-          _buildFeaturedStatCard(null, null),
+          ),
+
           const SizedBox(height: 12),
+
+          // ── Mini stat cards ────────────────────────────────────────
           Row(
             children: [
               Expanded(
-                child: _buildMiniStatCard(
+                child: _MiniStat(
                   label: 'Pending',
-                  value: '—',
+                  value: open != null ? '$open' : '—',
                   icon: Icons.hourglass_top_rounded,
                   color: const Color(0xFFF59E0B),
+                  bgColor: const Color(0xFFFFFBEB),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
-                child: _buildMiniStatCard(
+                child: _MiniStat(
+                  label: 'Assigned',
+                  value: assigned != null ? '$assigned' : '—',
+                  icon: Icons.person_rounded,
+                  color: const Color(0xFF6366F1),
+                  bgColor: const Color(0xFFEEF2FF),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _MiniStat(
                   label: 'Proses',
-                  value: '—',
+                  value: inProgress != null ? '$inProgress' : '—',
                   icon: Icons.autorenew_rounded,
                   color: const Color(0xFF0EA5E9),
+                  bgColor: const Color(0xFFE0F2FE),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
-                child: _buildMiniStatCard(
+                child: _MiniStat(
                   label: 'Selesai',
-                  value: '—',
+                  value: resolved != null ? '$resolved' : '—',
                   icon: Icons.task_alt_rounded,
                   color: const Color(0xFF10B981),
+                  bgColor: const Color(0xFFECFDF5),
                 ),
               ),
             ],
           ),
         ],
       ),
-      error: (_, __) => const SizedBox.shrink(),
     );
   }
+}
 
-  Widget _buildFeaturedStatCard(int? total, int? selesai) {
-    final progress = (total != null && total > 0 && selesai != null)
-        ? selesai / total
-        : 0.0;
+class _MiniStat extends StatelessWidget {
+  const _MiniStat({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+    required this.bgColor,
+  });
 
+  final String label, value;
+  final IconData icon;
+  final Color color, bgColor;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            AppColors.primary,
-            AppColors.primary.withBlue(255).withOpacity(0.85),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(24),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFEEF0FF), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withOpacity(0.28),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Total Tiket Ditangani',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  total != null ? '$total' : '—',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 40,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -1,
-                    height: 1,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                // Progress bar
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(100),
-                  child: LinearProgressIndicator(
-                    value: progress,
-                    backgroundColor: Colors.white.withOpacity(0.25),
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                      Colors.white,
-                    ),
-                    minHeight: 6,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  selesai != null && total != null
-                      ? '$selesai dari $total tiket selesai'
-                      : 'Memuat data...',
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Icon(
-              Icons.bar_chart_rounded,
-              color: Colors.white,
-              size: 32,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMiniStatCard({
-    required String label,
-    required String value,
-    required IconData icon,
-    required Color color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 12,
+            color: color.withOpacity(0.06),
+            blurRadius: 16,
             offset: const Offset(0, 4),
           ),
         ],
@@ -590,97 +830,154 @@ class _DashboardTeknisiScreenState extends ConsumerState<DashboardTeknisiScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 36,
-            height: 36,
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(12),
+              color: bgColor,
+              borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: color, size: 19),
+            child: Icon(icon, color: color, size: 17),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Text(
             value,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
               color: AppColors.textPrimary,
               letterSpacing: -0.5,
               height: 1,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 3),
           Text(
             label,
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 10,
               color: AppColors.textSecondary,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
       ),
     );
   }
+}
 
-  // ─── SECTION LABEL ────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════════
+// SECTION LABEL
+// ════════════════════════════════════════════════════════════════════════════════
 
-  Widget _buildSectionLabel(String title) {
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel({required this.title});
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
     return Row(
       children: [
         Container(
           width: 4,
-          height: 18,
+          height: 20,
           decoration: BoxDecoration(
-            color: AppColors.primary,
+            gradient: LinearGradient(
+              colors: [AppColors.primary, const Color(0xFF6366F1)],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
             borderRadius: BorderRadius.circular(2),
           ),
         ),
         const SizedBox(width: 10),
         Text(
           title,
-          style: const TextStyle(
-            fontSize: 16,
+          style: TextStyle(
+            fontSize: 17,
             fontWeight: FontWeight.w800,
             color: AppColors.textPrimary,
-            letterSpacing: -0.2,
+            letterSpacing: -0.4,
           ),
         ),
       ],
     );
   }
+}
 
-  // ─── MENU ITEM ────────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════════
+// MENU CARD
+// ════════════════════════════════════════════════════════════════════════════════
 
-  Widget _buildMenuItem(
-    BuildContext context, {
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required Color color,
-    required String route,
-    int? badgeCount,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
+class _MenuData {
+  const _MenuData({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.gradientEnd,
+    required this.route,
+  });
+  final String title, subtitle, route;
+  final IconData icon;
+  final Color color, gradientEnd;
+}
+
+class _MenuCard extends StatefulWidget {
+  const _MenuCard({required this.data});
+  final _MenuData data;
+
+  @override
+  State<_MenuCard> createState() => _MenuCardState();
+}
+
+class _MenuCardState extends State<_MenuCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _pressCtrl;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _pressCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 110),
+    );
+    _scale = Tween<double>(
+      begin: 1.0,
+      end: 0.95,
+    ).animate(CurvedAnimation(parent: _pressCtrl, curve: Curves.easeOut));
+  }
+
+  @override
+  void dispose() {
+    _pressCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final d = widget.data;
+    return GestureDetector(
+      onTapDown: (_) => _pressCtrl.forward(),
+      onTapUp: (_) async {
+        await _pressCtrl.reverse();
+        if (context.mounted) {
           HapticFeedback.selectionClick();
-          context.push(route);
-        },
-        borderRadius: BorderRadius.circular(22),
-        splashColor: color.withOpacity(0.1),
-        highlightColor: color.withOpacity(0.05),
-        child: Ink(
+          context.push(d.route);
+        }
+      },
+      onTapCancel: () => _pressCtrl.reverse(),
+      child: ScaleTransition(
+        scale: _scale,
+        child: Container(
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: Colors.white,
             borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: AppColors.border),
+            border: Border.all(color: d.color.withOpacity(0.15), width: 1.5),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.03),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
+                color: d.color.withOpacity(0.10),
+                blurRadius: 20,
+                offset: const Offset(0, 6),
               ),
             ],
           ),
@@ -689,52 +986,42 @@ class _DashboardTeknisiScreenState extends ConsumerState<DashboardTeknisiScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      width: 46,
-                      height: 46,
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(icon, color: color, size: 22),
+                // Gradient icon box
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [d.color, d.gradientEnd],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
-                    if (badgeCount != null)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: color,
-                          borderRadius: BorderRadius.circular(100),
-                        ),
-                        child: Text(
-                          '$badgeCount',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: d.color.withOpacity(0.35),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
                       ),
-                  ],
+                    ],
+                  ),
+                  child: Icon(d.icon, color: Colors.white, size: 26),
                 ),
+
                 const Spacer(),
+
                 Text(
-                  title,
-                  style: const TextStyle(
+                  d.title,
+                  style: TextStyle(
                     fontWeight: FontWeight.w800,
                     fontSize: 14,
                     color: AppColors.textPrimary,
-                    letterSpacing: -0.2,
+                    letterSpacing: -0.3,
                   ),
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  subtitle,
+                  d.subtitle,
                   style: TextStyle(
                     color: AppColors.textSecondary,
                     fontSize: 11,
@@ -743,6 +1030,27 @@ class _DashboardTeknisiScreenState extends ConsumerState<DashboardTeknisiScreen>
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
+
+                const SizedBox(height: 10),
+
+                // Color bar + arrow
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        height: 3,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [d.color.withOpacity(0.25), d.color],
+                          ),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(Icons.arrow_forward_rounded, color: d.color, size: 16),
+                  ],
+                ),
               ],
             ),
           ),
@@ -750,190 +1058,117 @@ class _DashboardTeknisiScreenState extends ConsumerState<DashboardTeknisiScreen>
       ),
     );
   }
+}
 
-  // ─── ACTIVITY ─────────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════════
+// ACTIVITY CARD
+// ════════════════════════════════════════════════════════════════════════════════
 
-  Widget _buildActivityItem({
-    required IconData icon,
-    required Color color,
-    required String title,
-    required String subtitle,
-    required String time,
-    required bool isLast,
-  }) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: isLast ? 0 : 10),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppColors.border),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(14),
+class _ActivityData {
+  const _ActivityData({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.subtitle,
+    required this.time,
+  });
+  final IconData icon;
+  final Color color;
+  final String title, subtitle, time;
+}
+
+class _ActivityCard extends StatelessWidget {
+  const _ActivityCard({required this.data});
+  final _ActivityData data;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFEEF0FF), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Left accent stripe
+          Container(
+            width: 4,
+            height: 44,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [data.color.withOpacity(0.5), data.color],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
               ),
-              child: Icon(icon, color: color, size: 20),
+              borderRadius: BorderRadius.circular(4),
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                      color: AppColors.textPrimary,
-                    ),
+          ),
+          const SizedBox(width: 12),
+          // Icon
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: data.color.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(data.icon, color: data.color, size: 20),
+          ),
+          const SizedBox(width: 14),
+          // Text
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  data.title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    color: AppColors.textPrimary,
+                    letterSpacing: -0.1,
                   ),
-                  const SizedBox(height: 3),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 11,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: AppColors.primarySoft,
-                borderRadius: BorderRadius.circular(100),
-              ),
-              child: Text(
-                time,
-                style: TextStyle(
-                  color: AppColors.primary,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
                 ),
-              ),
+                const SizedBox(height: 3),
+                Text(
+                  data.subtitle,
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 11,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ─── BOTTOM NAV ───────────────────────────────────────────────────────────────
-
-  Widget _buildBottomNav(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-        child: Container(
-          height: 66,
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: AppColors.border),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.08),
-                blurRadius: 24,
-                offset: const Offset(0, 6),
-              ),
-            ],
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _buildNavItem(
-                context: context,
-                icon: Icons.home_outlined,
-                selectedIcon: Icons.home_rounded,
-                label: 'Beranda',
-                isSelected: true,
-                onTap: () => context.go('/teknisi/dashboard'),
-              ),
-              _buildNavItem(
-                context: context,
-                icon: Icons.map_outlined,
-                selectedIcon: Icons.map_rounded,
-                label: 'ODP',
-                isSelected: false,
-                onTap: () => context.go('/teknisi/map-odp'),
-              ),
-              _buildNavItem(
-                context: context,
-                icon: Icons.confirmation_number_outlined,
-                selectedIcon: Icons.confirmation_number_rounded,
-                label: 'Tiket',
-                isSelected: false,
-                onTap: () => context.go('/teknisi/tickets'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem({
-    required BuildContext context,
-    required IconData icon,
-    required IconData selectedIcon,
-    required String label,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          HapticFeedback.selectionClick();
-          onTap();
-        },
-        behavior: HitTestBehavior.opaque,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? AppColors.primary.withOpacity(0.1)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                isSelected ? selectedIcon : icon,
-                color: isSelected ? AppColors.primary : AppColors.textSecondary,
-                size: 22,
-              ),
+          const SizedBox(width: 8),
+          // Time badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: data.color.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(100),
             ),
-            const SizedBox(height: 2),
-            Text(
-              label,
+            child: Text(
+              data.time,
               style: TextStyle(
+                color: data.color,
                 fontSize: 10,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400,
-                color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                fontWeight: FontWeight.w700,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
