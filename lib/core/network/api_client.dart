@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
-  static const String baseUrl = 'http://192.168.18.123:8000/api';
+  static const String baseUrl = 'http://192.168.43.126:8000/api';
 
   static const String _tokenKey = 'auth_token';
   static const String _userRoleKey = 'user_role';

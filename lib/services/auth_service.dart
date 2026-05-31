@@ -4,7 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 class AuthService {
   final Dio dio = Dio(
     BaseOptions(
-      baseUrl: 'http://192.168.18.123:8000/api',
+      baseUrl: 'http://192.168.43.126:8000/api',
       headers: {'Accept': 'application/json'},
     ),
   );

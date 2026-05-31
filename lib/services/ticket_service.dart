@@ -11,7 +11,7 @@ class TicketService {
   // static const String baseUrl = 'http://10.0.2.2:8000/api';
 
   // HP fisik:
-  static const String baseUrl = 'http://192.168.18.123:8000/api';
+  static const String baseUrl = 'http://192.168.43.126:8000/api';
 
   // ===========================================================================
   // GET DETAIL TICKET
